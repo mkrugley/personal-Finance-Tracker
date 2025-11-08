@@ -164,7 +164,6 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 **Твоё Имя**
 - GitHub: [@mkrugley](https://github.com/mkrugley)
-- Email: maxkrugley@email.com
 
 ## 🙏 Благодарности
 
