@@ -173,9 +173,9 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ## 📊 Статистика проекта
 
-![GitHub stars](https://img.shields.io/github/stars/твой-username/finance-tracker?style=social)
-![GitHub forks](https://img.shields.io/github/forks/твой-username/finance-tracker?style=social)
-![GitHub watchers](https://img.shields.io/github/watchers/твой-username/finance-tracker?style=social)
+![GitHub stars](https://img.shields.io/github/stars/mkrugley/finance-tracker?style=social)
+![GitHub forks](https://img.shields.io/github/forks/mkrugley/finance-tracker?style=social)
+![GitHub watchers](https://img.shields.io/github/watchers/mkrugley/finance-tracker?style=social)
 
 ---
 
