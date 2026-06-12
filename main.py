@@ -5,6 +5,7 @@
 
 import json
 import os
+import sqlite3
 from datetime import datetime
 from typing import List, Dict, Optional
 
@@ -44,47 +45,47 @@ class Transaction:
 class FinanceTracker:
     """Основной класс для управления финансами"""
     
-    def __init__(self, data_file: str = 'transactions.json'):
-        self.data_file = data_file
-        self.transactions: List[Transaction] = []
-        self.load_data()
+    def __init__(self, db_file: str = 'finance.db'):
+        self.db_file = db_file
+        self.init_db()
     
-    def load_data(self):
-        """Загрузка данных из файла"""
-        if os.path.exists(self.data_file):
-            try:
-                with open(self.data_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    # Преобразуем словари обратно в объекты Transaction
-                    self.transactions = [
-                        Transaction.from_dict(t) for t in data
-                    ]
-                print(f"Загружено {len(self.transactions)} транзакций")
-            except Exception as e:
-                print(f"Ошибка при загрузке данных: {e}")
-                self.transactions = []
-        else:
-            print("Файл данных не найден, создаём новый")
-            self.transactions = []
-    
-    def save_data(self):
-        """Сохранение данных в файл"""
-        try:
-            with open(self.data_file, 'w', encoding='utf-8') as f:
-                # Конвертируем объекты в словари для JSON
-                data = [t.to_dict() for t in self.transactions]
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            print("Данные успешно сохранены")
-        except Exception as e:
-            print(f"Ошибка при сохранении: {e}")
+    def init_db(self):
+        """Инициализация базы данных SQLite"""
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+        
+        # Создание таблицы транзакций
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                amount REAL NOT NULL,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL,
+                date TEXT NOT NULL
+            )
+        ''')
+        
+        conn.commit()
+        conn.close()
     
     def add_transaction(self, amount: float, category: str, 
-                       description: str) -> bool:
+                       description: str, date: str = None) -> bool:
         """Добавление новой транзакции"""
         try:
-            transaction = Transaction(amount, category, description)
-            self.transactions.append(transaction)
-            self.save_data()
+            if date is None:
+                date = datetime.now().strftime("%Y-%m-%d")
+            
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO transactions (amount, category, description, date)
+                VALUES (?, ?, ?, ?)
+            ''', (amount, category, description, date))
+            
+            conn.commit()
+            conn.close()
+            
             print(f"Транзакция добавлена: {amount} руб. ({category})")
             return True
         except Exception as e:
@@ -93,37 +94,87 @@ class FinanceTracker:
     
     def get_balance(self) -> float:
         """Расчёт текущего баланса"""
-        balance = sum(t.amount for t in self.transactions)
-        return balance
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT SUM(amount) FROM transactions')
+        result = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        return result if result is not None else 0.0
     
-    def get_transactions_by_category(self, category: str) -> List[Transaction]:
+    def get_transactions_by_category(self, category: str) -> List[Dict]:
         """Получение всех транзакций по категории"""
-        return [t for t in self.transactions if t.category == category]
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT amount, category, description, date 
+            FROM transactions 
+            WHERE category = ?
+        ''', (category,))
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [{'amount': row[0], 'category': row[1], 'description': row[2], 'date': row[3]} 
+                for row in rows]
     
     def get_category_totals(self) -> Dict[str, float]:
         """Получение суммы по каждой категории"""
-        totals = {}
-        for transaction in self.transactions:
-            category = transaction.category
-            if category not in totals:
-                totals[category] = 0
-            totals[category] += transaction.amount
-        return totals
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT category, SUM(amount) 
+            FROM transactions 
+            GROUP BY category
+        ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return {row[0]: row[1] for row in rows}
     
-    def delete_transaction(self, index: int) -> bool:
-        """Удаление транзакции по индексу"""
+    def delete_transaction(self, transaction_id: int) -> bool:
+        """Удаление транзакции по ID"""
         try:
-            if 0 <= index < len(self.transactions):
-                deleted = self.transactions.pop(index)
-                self.save_data()
-                print(f"Удалена транзакция: {deleted.description}")
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            
+            cursor.execute('DELETE FROM transactions WHERE id = ?', (transaction_id,))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                conn.close()
+                print(f"Удалена транзакция с ID: {transaction_id}")
                 return True
             else:
-                print("Неверный индекс транзакции")
+                conn.close()
+                print("Транзакция с таким ID не найдена")
                 return False
+                
         except Exception as e:
             print(f"Ошибка при удалении: {e}")
             return False
+    
+    def get_all_transactions(self) -> List[Dict]:
+        """Получение всех транзакций"""
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, amount, category, description, date 
+            FROM transactions 
+            ORDER BY date DESC
+        ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [{'id': row[0], 'amount': row[1], 'category': row[2], 'description': row[3], 'date': row[4]} 
+                for row in rows]
 
 def clear_screen():
     """Очистка экрана терминала"""
@@ -226,9 +277,17 @@ def show_balance(tracker: FinanceTracker):
     
     balance = tracker.get_balance()
     
-    # Разделяем на доходы и расходы
-    income = sum(t.amount for t in tracker.transactions if t.amount > 0)
-    expenses = sum(t.amount for t in tracker.transactions if t.amount < 0)
+    # Получаем доходы и расходы отдельно
+    conn = sqlite3.connect(tracker.db_file)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT SUM(amount) FROM transactions WHERE amount > 0')
+    income = cursor.fetchone()[0] or 0.0
+    
+    cursor.execute('SELECT SUM(amount) FROM transactions WHERE amount < 0')
+    expenses = cursor.fetchone()[0] or 0.0
+    
+    conn.close()
     
     print(f"💰 Баланс: {balance:.2f} руб.")
     print(f"📈 Доходы: {income:.2f} руб.")
@@ -239,22 +298,17 @@ def show_all_transactions(tracker: FinanceTracker):
     """Показать все транзакции"""
     print_header("Все транзакции")
     
-    if not tracker.transactions:
+    transactions = tracker.get_all_transactions()
+    
+    if not transactions:
         print("📭 Транзакций пока нет")
         return
     
-    # Сортируем по дате (новые первые)
-    sorted_transactions = sorted(
-        tracker.transactions, 
-        key=lambda x: x.date, 
-        reverse=True
-    )
-    
-    for i, transaction in enumerate(sorted_transactions):
-        sign = "+" if transaction.amount > 0 else ""
-        print(f"{i+1}. [{transaction.date}] "
-              f"{transaction.category}: {transaction.description}")
-        print(f"   {sign}{transaction.amount:.2f} руб.\n")
+    for transaction in transactions:
+        sign = "+" if transaction['amount'] > 0 else ""
+        print(f"{transaction['id']}. [{transaction['date']}] "
+              f"{transaction['category']}: {transaction['description']}")
+        print(f"   {sign}{transaction['amount']:.2f} руб.\n")
 
 def show_statistics(tracker: FinanceTracker):
     """Показать статистику по категориям"""
@@ -286,24 +340,26 @@ def delete_transaction_menu(tracker: FinanceTracker):
     """Меню удаления транзакции"""
     print_header("Удалить транзакцию")
     
-    if not tracker.transactions:
+    transactions = tracker.get_all_transactions()
+    
+    if not transactions:
         print("📭 Транзакций пока нет")
         return
     
     # Показываем все транзакции с номерами
-    for i, transaction in enumerate(tracker.transactions):
-        sign = "+" if transaction.amount > 0 else ""
-        print(f"{i+1}. [{transaction.date}] "
-              f"{transaction.category}: {transaction.description} - "
-              f"{sign}{transaction.amount:.2f} руб.")
+    for transaction in transactions:
+        sign = "+" if transaction['amount'] > 0 else ""
+        print(f"{transaction['id']}. [{transaction['date']}] "
+              f"{transaction['category']}: {transaction['description']} - "
+              f"{sign}{transaction['amount']:.2f} руб.")
     
     print()
     try:
-        choice = int(input("Введите номер транзакции для удаления (0 - отмена): "))
+        choice = int(input("Введите ID транзакции для удаления (0 - отмена): "))
         if choice == 0:
             return
         
-        if tracker.delete_transaction(choice - 1):
+        if tracker.delete_transaction(choice):
             print("✅ Транзакция удалена!")
         else:
             print("❌ Не удалось удалить транзакцию")
