@@ -52,6 +52,7 @@ class FinanceTracker:
     
     def __init__(self, db_file: str = 'finance.db'):
         self.db_file = db_file
+        self.console = Console()
         self.init_db()
     
     def init_db(self):
@@ -177,6 +178,46 @@ class FinanceTracker:
         
         return [{'id': row[0], 'amount': row[1], 'category': row[2], 'description': row[3], 'date': row[4]} 
                 for row in rows]
+    
+    def get_existing_categories(self, income: bool = True) -> List[str]:
+        """Получение списка существующих категорий"""
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+        
+        if income:
+            cursor.execute('''
+                SELECT DISTINCT category 
+                FROM transactions 
+                WHERE amount > 0
+                ORDER BY category
+            ''')
+        else:
+            cursor.execute('''
+                SELECT DISTINCT category 
+                FROM transactions 
+                WHERE amount < 0
+                ORDER BY category
+            ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [row[0] for row in rows]
+    
+    def delete_transaction(self, transaction_id: int) -> bool:
+        """Удаление транзакции по ID"""
+        try:
+            conn = sqlite3.connect(self.db_file)
+            cursor = conn.cursor()
+            
+            cursor.execute('DELETE FROM transactions WHERE id = ?', (transaction_id,))
+            conn.commit()
+            conn.close()
+            
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Ошибка при удалении транзакции: {e}")
+            return False
 
 def clear_screen():
     """Очистка экрана терминала"""
@@ -197,8 +238,9 @@ def print_menu():
     console.print("3. Показать баланс")
     console.print("4. Показать все транзакции")
     console.print("5. Статистика по категориям")
-    console.print("6. Удалить транзакцию")
-    console.print("7. Экспорт в CSV")
+    console.print("6. Расширенная статистика")
+    console.print("7. Удалить транзакцию")
+    console.print("8. Экспорт в CSV")
     console.print("0. Выход")
     console.print("\n")
 
@@ -209,31 +251,36 @@ def add_income(tracker: FinanceTracker):
     try:
         amount = FloatPrompt.ask("Сумма")
         if amount <= 0:
-            tracker.console.print("[red]❌ Сумма должна быть положительной[/red]")
+            print("[red]❌ Сумма должна быть положительной[/red]")
             return
         
-        tracker.console.print("\nКатегории дохода:")
-        tracker.console.print("1. Зарплата")
-        tracker.console.print("2. Фриланс")
-        tracker.console.print("3. Инвестиции")
-        tracker.console.print("4. Другое")
+        # Получаем список существующих категорий доходов
+        existing_categories = tracker.get_existing_categories(income=True)
+        if existing_categories:
+            print("\nСуществующие категории дохода:")
+            for i, cat in enumerate(existing_categories, 1):
+                print(f"{i}. {cat}")
+            print(f"{len(existing_categories) + 1}. Добавить новую категорию")
+            print(f"{len(existing_categories) + 2}. Другое")
+            
+            choice = IntPrompt.ask("\nВыберите категорию", choices=[str(i) for i in range(1, len(existing_categories) + 3)])
+            
+            if choice <= len(existing_categories):
+                category = existing_categories[choice - 1]
+            elif choice == len(existing_categories) + 1:
+                category = Prompt.ask("Введите новую категорию")
+            else:
+                category = "Другое"
+        else:
+            category = Prompt.ask("Введите категорию дохода")
         
-        choice = Prompt.ask("\nВыберите категорию (1-4)")
-        categories = {
-            '1': 'Зарплата',
-            '2': 'Фриланс',
-            '3': 'Инвестиции',
-            '4': 'Другое'
-        }
-        
-        category = categories.get(choice, 'Другое')
         description = Prompt.ask("Описание")
         
         if tracker.add_transaction(amount, category, description):
-            tracker.console.print("[green]✅ Доход успешно добавлен![/green]")
+            print("[green]✅ Доход успешно добавлен![/green]")
         
     except ValueError:
-        tracker.console.print("[red]❌ Неверный формат суммы[/red]")
+        print("[red]❌ Неверный формат суммы[/red]")
 
 def add_expense(tracker: FinanceTracker):
     """Добавление расхода"""
@@ -242,38 +289,39 @@ def add_expense(tracker: FinanceTracker):
     try:
         amount = FloatPrompt.ask("Сумма")
         if amount <= 0:
-            tracker.console.print("[red]❌ Сумма должна быть положительной[/red]")
+            print("[red]❌ Сумма должна быть положительной[/red]")
             return
         
         # Делаем сумму отрицательной для расхода
         amount = -amount
         
-        tracker.console.print("\nКатегории расхода:")
-        tracker.console.print("1. Еда")
-        tracker.console.print("2. Транспорт")
-        tracker.console.print("3. Развлечения")
-        tracker.console.print("4. Здоровье")
-        tracker.console.print("5. Образование")
-        tracker.console.print("6. Другое")
+        # Получаем список существующих категорий расходов
+        existing_categories = tracker.get_existing_categories(income=False)
+        if existing_categories:
+            print("\nСуществующие категории расхода:")
+            for i, cat in enumerate(existing_categories, 1):
+                print(f"{i}. {cat}")
+            print(f"{len(existing_categories) + 1}. Добавить новую категорию")
+            print(f"{len(existing_categories) + 2}. Другое")
+            
+            choice = IntPrompt.ask("\nВыберите категорию", choices=[str(i) for i in range(1, len(existing_categories) + 3)])
+            
+            if choice <= len(existing_categories):
+                category = existing_categories[choice - 1]
+            elif choice == len(existing_categories) + 1:
+                category = Prompt.ask("Введите новую категорию")
+            else:
+                category = "Другое"
+        else:
+            category = Prompt.ask("Введите категорию расхода")
         
-        choice = Prompt.ask("\nВыберите категорию (1-6)")
-        categories = {
-            '1': 'Еда',
-            '2': 'Транспорт',
-            '3': 'Развлечения',
-            '4': 'Здоровье',
-            '5': 'Образование',
-            '6': 'Другое'
-        }
-        
-        category = categories.get(choice, 'Другое')
         description = Prompt.ask("Описание")
         
         if tracker.add_transaction(amount, category, description):
-            tracker.console.print("[green]✅ Расход успешно добавлен![/green]")
+            print("[green]✅ Расход успешно добавлен![/green]")
         
     except ValueError:
-        tracker.console.print("[red]❌ Неверный формат суммы[/red]")
+        print("[red]❌ Неверный формат суммы[/red]")
 
 def show_balance(tracker: FinanceTracker):
     """Показать текущий баланс"""
@@ -301,8 +349,9 @@ def show_balance(tracker: FinanceTracker):
     table.add_row("📈 Доходы", f"{income:.2f} руб.")
     table.add_row("📉 Расходы", f"{expenses:.2f} руб.")
     
-    tracker.console.print(table)
-    tracker.console.print("\n")
+    console = Console()
+    console.print(table)
+    console.print("\n")
 
 def show_all_transactions(tracker: FinanceTracker):
     """Показать все транзакции"""
@@ -311,7 +360,8 @@ def show_all_transactions(tracker: FinanceTracker):
     transactions = tracker.get_all_transactions()
     
     if not transactions:
-        tracker.console.print("[yellow]📭 Транзакций пока нет[/yellow]")
+        console = Console()
+        console.print("[yellow]📭 Транзакций пока нет[/yellow]")
         return
     
     table = Table(show_header=True, header_style="bold magenta")
@@ -335,8 +385,9 @@ def show_all_transactions(tracker: FinanceTracker):
             style=style
         )
     
-    tracker.console.print(table)
-    tracker.console.print("\n")
+    console = Console()
+    console.print(table)
+    console.print("\n")
 
 def show_statistics(tracker: FinanceTracker):
     """Показать статистику по категориям"""
@@ -345,7 +396,8 @@ def show_statistics(tracker: FinanceTracker):
     totals = tracker.get_category_totals()
     
     if not totals:
-        tracker.console.print("[yellow]📭 Транзакций пока нет[/yellow]")
+        console = Console()
+        console.print("[yellow]📭 Транзакций пока нет[/yellow]")
         return
     
     # Сортируем категории по сумме
@@ -366,7 +418,144 @@ def show_statistics(tracker: FinanceTracker):
         
         table.add_row(category, amount_str, style=style)
     
+    console = Console()
+    console.print(table)
+    console.print("\n")
+
+def show_advanced_statistics(tracker: FinanceTracker):
+    """Показать расширенную статистику"""
+    print_header("Расширенная статистика")
+    
+    conn = sqlite3.connect(tracker.db_file)
+    cursor = conn.cursor()
+    
+    # Общее количество транзакций
+    cursor.execute('SELECT COUNT(*) FROM transactions')
+    total_transactions = cursor.fetchone()[0] or 0
+    
+    if total_transactions == 0:
+        tracker.console.print("[yellow]📭 Транзакций пока нет[/yellow]")
+        conn.close()
+        return
+    
+    # Общий баланс
+    cursor.execute('SELECT SUM(amount) FROM transactions')
+    total_balance = cursor.fetchone()[0] or 0.0
+    
+    # Доходы
+    cursor.execute('SELECT SUM(amount) FROM transactions WHERE amount > 0')
+    total_income = cursor.fetchone()[0] or 0.0
+    
+    # Расходы
+    cursor.execute('SELECT SUM(amount) FROM transactions WHERE amount < 0')
+    total_expenses = cursor.fetchone()[0] or 0.0
+    
+    # Средний доход
+    cursor.execute('SELECT AVG(amount) FROM transactions WHERE amount > 0')
+    avg_income = cursor.fetchone()[0] or 0.0
+    
+    # Средний расход
+    cursor.execute('SELECT AVG(amount) FROM transactions WHERE amount < 0')
+    avg_expense = cursor.fetchone()[0] or 0.0
+    
+    # Количество доходов
+    cursor.execute('SELECT COUNT(*) FROM transactions WHERE amount > 0')
+    income_count = cursor.fetchone()[0] or 0
+    
+    # Количество расходов
+    cursor.execute('SELECT COUNT(*) FROM transactions WHERE amount < 0')
+    expense_count = cursor.fetchone()[0] or 0
+    
+    # Лучший месяц по доходам
+    cursor.execute('''
+        SELECT strftime('%Y-%m', date) as month, SUM(amount) as total
+        FROM transactions 
+        WHERE amount > 0
+        GROUP BY month
+        ORDER BY total DESC
+        LIMIT 1
+    ''')
+    best_month_income = cursor.fetchone()
+    
+    # Худший месяц по расходам
+    cursor.execute('''
+        SELECT strftime('%Y-%m', date) as month, SUM(amount) as total
+        FROM transactions 
+        WHERE amount < 0
+        GROUP BY month
+        ORDER BY total ASC
+        LIMIT 1
+    ''')
+    worst_month_expense = cursor.fetchone()
+    
+    # Топ-3 категории доходов
+    cursor.execute('''
+        SELECT category, SUM(amount) as total
+        FROM transactions 
+        WHERE amount > 0
+        GROUP BY category
+        ORDER BY total DESC
+        LIMIT 3
+    ''')
+    top_income_categories = cursor.fetchall()
+    
+    # Топ-3 категории расходов
+    cursor.execute('''
+        SELECT category, SUM(amount) as total
+        FROM transactions 
+        WHERE amount < 0
+        GROUP BY category
+        ORDER BY total ASC
+        LIMIT 3
+    ''')
+    top_expense_categories = cursor.fetchall()
+    
+    conn.close()
+    
+    # Выводим статистику
+    table = Table(show_header=False)
+    table.add_column("Показатель", style="cyan")
+    table.add_column("Значение", style="magenta")
+    
+    table.add_row("📊 Всего транзакций", str(total_transactions))
+    table.add_row("💰 Общий баланс", f"{total_balance:.2f} руб.")
+    table.add_row("📈 Всего доходов", f"{total_income:.2f} руб. ({income_count} транзакций)")
+    table.add_row("📉 Всего расходов", f"{total_expenses:.2f} руб. ({expense_count} транзакций)")
+    table.add_row("📈 Средний доход", f"{avg_income:.2f} руб.")
+    table.add_row("📉 Средний расход", f"{abs(avg_expense):.2f} руб.")
+    
+    if best_month_income:
+        table.add_row("🌟 Лучший месяц (доходы)", f"{best_month_income[0]} ({best_month_income[1]:.2f} руб.)")
+    
+    if worst_month_expense:
+        table.add_row("⚠️ Худший месяц (расходы)", f"{worst_month_expense[0]} ({worst_month_expense[1]:.2f} руб.)")
+    
     tracker.console.print(table)
+    
+    # Выводим топ-3 категории доходов
+    if top_income_categories:
+        tracker.console.print("\n🏆 Топ-3 категории доходов:")
+        income_table = Table(show_header=True, header_style="bold green")
+        income_table.add_column("Категория", style="cyan")
+        income_table.add_column("Сумма", justify="right")
+        
+        for category, amount in top_income_categories:
+            income_table.add_row(category, f"{amount:.2f} руб.")
+        
+        tracker.console.print(income_table)
+    
+    # Выводим топ-3 категории расходов
+    if top_expense_categories:
+        tracker.console.print("\n💸 Топ-3 категории расходов:")
+        expense_table = Table(show_header=True, header_style="bold red")
+        expense_table.add_column("Категория", style="cyan")
+        expense_table.add_column("Сумма", justify="right")
+        
+        for category, amount in top_expense_categories:
+            expense_table.add_row(category, f"{abs(amount):.2f} руб.")
+        
+        tracker.console.print(expense_table)
+    
     tracker.console.print("\n")
 
 def delete_transaction_menu(tracker: FinanceTracker):
@@ -376,7 +565,8 @@ def delete_transaction_menu(tracker: FinanceTracker):
     transactions = tracker.get_all_transactions()
     
     if not transactions:
-        tracker.console.print("[yellow]📭 Транзакций пока нет[/yellow]")
+        console = Console()
+        console.print("[yellow]📭 Транзакций пока нет[/yellow]")
         return
     
     # Показываем все транзакции с номерами
@@ -401,7 +591,8 @@ def delete_transaction_menu(tracker: FinanceTracker):
             style=style
         )
     
-    tracker.console.print(table)
+    console = Console()
+    console.print(table)
     
     try:
         choice = IntPrompt.ask("\nВведите ID транзакции для удаления (0 - отмена)")
@@ -409,12 +600,12 @@ def delete_transaction_menu(tracker: FinanceTracker):
             return
         
         if tracker.delete_transaction(choice):
-            tracker.console.print("[green]✅ Транзакция удалена![/green]")
+            console.print("[green]✅ Транзакция удалена![/green]")
         else:
-            tracker.console.print("[red]❌ Не удалось удалить транзакцию[/red]")
+            console.print("[red]❌ Не удалось удалить транзакцию[/red]")
             
     except ValueError:
-        tracker.console.print("[red]❌ Неверный ввод[/red]")
+        console.print("[red]❌ Неверный ввод[/red]")
 
 def export_to_csv_menu(tracker: FinanceTracker):
     """Меню экспорта в CSV"""
@@ -426,9 +617,11 @@ def export_to_csv_menu(tracker: FinanceTracker):
         filename += '.csv'
     
     if tracker.export_to_csv(filename):
-        tracker.console.print(f"[green]✅ Данные успешно экспортированы в {filename}[/green]")
+        console = Console()
+        console.print(f"[green]✅ Данные успешно экспортированы в {filename}[/green]")
     else:
-        tracker.console.print("[red]❌ Ошибка при экспорте[/red]")
+        console = Console()
+        console.print("[red]❌ Ошибка при экспорте[/red]")
 
 def main():
     """Главная функция программы"""
@@ -450,8 +643,10 @@ def main():
         elif choice == '5':
             show_statistics(tracker)
         elif choice == '6':
-            delete_transaction_menu(tracker)
+            show_advanced_statistics(tracker)
         elif choice == '7':
+            delete_transaction_menu(tracker)
+        elif choice == '8':
             export_to_csv_menu(tracker)
         elif choice == '0':
             console.print("\n[bold cyan]👋 До свидания![/bold cyan]")
