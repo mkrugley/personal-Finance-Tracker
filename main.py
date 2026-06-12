@@ -6,6 +6,7 @@
 import json
 import os
 import sqlite3
+import csv
 from datetime import datetime
 from typing import List, Dict, Optional
 
@@ -137,26 +138,23 @@ class FinanceTracker:
         
         return {row[0]: row[1] for row in rows}
     
-    def delete_transaction(self, transaction_id: int) -> bool:
-        """Удаление транзакции по ID"""
+    def export_to_csv(self, filename: str = 'transactions.csv') -> bool:
+        """Экспорт всех транзакций в CSV файл"""
         try:
-            conn = sqlite3.connect(self.db_file)
-            cursor = conn.cursor()
+            transactions = self.get_all_transactions()
             
-            cursor.execute('DELETE FROM transactions WHERE id = ?', (transaction_id,))
-            
-            if cursor.rowcount > 0:
-                conn.commit()
-                conn.close()
-                print(f"Удалена транзакция с ID: {transaction_id}")
-                return True
-            else:
-                conn.close()
-                print("Транзакция с таким ID не найдена")
-                return False
+            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                fieldnames = ['id', 'amount', 'category', 'description', 'date']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 
+                writer.writeheader()
+                for transaction in transactions:
+                    writer.writerow(transaction)
+            
+            print(f"✅ Данные экспортированы в {filename}")
+            return True
         except Exception as e:
-            print(f"Ошибка при удалении: {e}")
+            print(f"❌ Ошибка при экспорте: {e}")
             return False
     
     def get_all_transactions(self) -> List[Dict]:
@@ -195,6 +193,7 @@ def print_menu():
     print("4. Показать все транзакции")
     print("5. Статистика по категориям")
     print("6. Удалить транзакцию")
+    print("7. Экспорт в CSV")
     print("0. Выход")
     print()
 
@@ -367,6 +366,22 @@ def delete_transaction_menu(tracker: FinanceTracker):
     except ValueError:
         print("❌ Неверный ввод")
 
+def export_to_csv_menu(tracker: FinanceTracker):
+    """Меню экспорта в CSV"""
+    print_header("Экспорт в CSV")
+    
+    filename = input("Введите имя файла (по умолчанию transactions.csv): ").strip()
+    if not filename:
+        filename = "transactions.csv"
+    
+    if not filename.endswith('.csv'):
+        filename += '.csv'
+    
+    if tracker.export_to_csv(filename):
+        print(f"✅ Данные успешно экспортированы в {filename}")
+    else:
+        print("❌ Ошибка при экспорте")
+
 def main():
     """Главная функция программы"""
     tracker = FinanceTracker()
@@ -387,6 +402,8 @@ def main():
             show_statistics(tracker)
         elif choice == '6':
             delete_transaction_menu(tracker)
+        elif choice == '7':
+            export_to_csv_menu(tracker)
         elif choice == '0':
             print("\n👋 До свидания!")
             break
