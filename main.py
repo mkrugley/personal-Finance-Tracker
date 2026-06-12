@@ -9,6 +9,10 @@ import sqlite3
 import csv
 from datetime import datetime
 from typing import List, Dict, Optional
+from rich.console import Console
+from rich.table import Table
+from rich.prompt import Prompt, FloatPrompt, IntPrompt
+from rich.panel import Panel
 
 class Transaction:
     """Класс для представления одной транзакции"""
@@ -180,40 +184,41 @@ def clear_screen():
 
 def print_header(title: str):
     """Красивый заголовок"""
-    print("\n" + "="*50)
-    print(f"  {title}")
-    print("="*50 + "\n")
+    console = Console()
+    console.print(Panel(title, expand=False))
 
 def print_menu():
     """Вывод главного меню"""
-    print_header("💰 Personal Finance Tracker")
-    print("1. Добавить доход")
-    print("2. Добавить расход")
-    print("3. Показать баланс")
-    print("4. Показать все транзакции")
-    print("5. Статистика по категориям")
-    print("6. Удалить транзакцию")
-    print("7. Экспорт в CSV")
-    print("0. Выход")
-    print()
+    console = Console()
+    console.print("\n")
+    console.print(Panel("💰 Personal Finance Tracker", expand=False))
+    console.print("1. Добавить доход")
+    console.print("2. Добавить расход")
+    console.print("3. Показать баланс")
+    console.print("4. Показать все транзакции")
+    console.print("5. Статистика по категориям")
+    console.print("6. Удалить транзакцию")
+    console.print("7. Экспорт в CSV")
+    console.print("0. Выход")
+    console.print("\n")
 
 def add_income(tracker: FinanceTracker):
     """Добавление дохода"""
     print_header("Добавить доход")
     
     try:
-        amount = float(input("Сумма: "))
+        amount = FloatPrompt.ask("Сумма")
         if amount <= 0:
-            print("❌ Сумма должна быть положительной")
+            tracker.console.print("[red]❌ Сумма должна быть положительной[/red]")
             return
         
-        print("\nКатегории дохода:")
-        print("1. Зарплата")
-        print("2. Фриланс")
-        print("3. Инвестиции")
-        print("4. Другое")
+        tracker.console.print("\nКатегории дохода:")
+        tracker.console.print("1. Зарплата")
+        tracker.console.print("2. Фриланс")
+        tracker.console.print("3. Инвестиции")
+        tracker.console.print("4. Другое")
         
-        choice = input("\nВыберите категорию (1-4): ")
+        choice = Prompt.ask("\nВыберите категорию (1-4)")
         categories = {
             '1': 'Зарплата',
             '2': 'Фриланс',
@@ -222,36 +227,36 @@ def add_income(tracker: FinanceTracker):
         }
         
         category = categories.get(choice, 'Другое')
-        description = input("Описание: ")
+        description = Prompt.ask("Описание")
         
-        tracker.add_transaction(amount, category, description)
-        print("✅ Доход успешно добавлен!")
+        if tracker.add_transaction(amount, category, description):
+            tracker.console.print("[green]✅ Доход успешно добавлен![/green]")
         
     except ValueError:
-        print("❌ Неверный формат суммы")
+        tracker.console.print("[red]❌ Неверный формат суммы[/red]")
 
 def add_expense(tracker: FinanceTracker):
     """Добавление расхода"""
     print_header("Добавить расход")
     
     try:
-        amount = float(input("Сумма: "))
+        amount = FloatPrompt.ask("Сумма")
         if amount <= 0:
-            print("❌ Сумма должна быть положительной")
+            tracker.console.print("[red]❌ Сумма должна быть положительной[/red]")
             return
         
         # Делаем сумму отрицательной для расхода
         amount = -amount
         
-        print("\nКатегории расхода:")
-        print("1. Еда")
-        print("2. Транспорт")
-        print("3. Развлечения")
-        print("4. Здоровье")
-        print("5. Образование")
-        print("6. Другое")
+        tracker.console.print("\nКатегории расхода:")
+        tracker.console.print("1. Еда")
+        tracker.console.print("2. Транспорт")
+        tracker.console.print("3. Развлечения")
+        tracker.console.print("4. Здоровье")
+        tracker.console.print("5. Образование")
+        tracker.console.print("6. Другое")
         
-        choice = input("\nВыберите категорию (1-6): ")
+        choice = Prompt.ask("\nВыберите категорию (1-6)")
         categories = {
             '1': 'Еда',
             '2': 'Транспорт',
@@ -262,13 +267,13 @@ def add_expense(tracker: FinanceTracker):
         }
         
         category = categories.get(choice, 'Другое')
-        description = input("Описание: ")
+        description = Prompt.ask("Описание")
         
-        tracker.add_transaction(amount, category, description)
-        print("✅ Расход успешно добавлен!")
+        if tracker.add_transaction(amount, category, description):
+            tracker.console.print("[green]✅ Расход успешно добавлен![/green]")
         
     except ValueError:
-        print("❌ Неверный формат суммы")
+        tracker.console.print("[red]❌ Неверный формат суммы[/red]")
 
 def show_balance(tracker: FinanceTracker):
     """Показать текущий баланс"""
@@ -288,10 +293,16 @@ def show_balance(tracker: FinanceTracker):
     
     conn.close()
     
-    print(f"💰 Баланс: {balance:.2f} руб.")
-    print(f"📈 Доходы: {income:.2f} руб.")
-    print(f"📉 Расходы: {expenses:.2f} руб.")
-    print()
+    table = Table(show_header=False)
+    table.add_column("Показатель", style="cyan")
+    table.add_column("Значение", style="magenta")
+    
+    table.add_row("💰 Баланс", f"{balance:.2f} руб.")
+    table.add_row("📈 Доходы", f"{income:.2f} руб.")
+    table.add_row("📉 Расходы", f"{expenses:.2f} руб.")
+    
+    tracker.console.print(table)
+    tracker.console.print("\n")
 
 def show_all_transactions(tracker: FinanceTracker):
     """Показать все транзакции"""
@@ -300,24 +311,42 @@ def show_all_transactions(tracker: FinanceTracker):
     transactions = tracker.get_all_transactions()
     
     if not transactions:
-        print("📭 Транзакций пока нет")
+        tracker.console.print("[yellow]📭 Транзакций пока нет[/yellow]")
         return
+    
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("ID", style="dim", width=5)
+    table.add_column("Дата", style="dim")
+    table.add_column("Категория")
+    table.add_column("Описание")
+    table.add_column("Сумма", justify="right")
     
     for transaction in transactions:
         sign = "+" if transaction['amount'] > 0 else ""
-        print(f"{transaction['id']}. [{transaction['date']}] "
-              f"{transaction['category']}: {transaction['description']}")
-        print(f"   {sign}{transaction['amount']:.2f} руб.\n")
+        amount_str = f"{sign}{transaction['amount']:.2f}"
+        style = "green" if transaction['amount'] > 0 else "red"
+        
+        table.add_row(
+            str(transaction['id']),
+            transaction['date'],
+            transaction['category'],
+            transaction['description'],
+            amount_str,
+            style=style
+        )
+    
+    tracker.console.print(table)
+    tracker.console.print("\n")
 
 def show_statistics(tracker: FinanceTracker):
     """Показать статистику по категориям"""
     print_header("Статистика по категориям")
     
-    if not tracker.transactions:
-        print("📭 Транзакций пока нет")
-        return
-    
     totals = tracker.get_category_totals()
+    
+    if not totals:
+        tracker.console.print("[yellow]📭 Транзакций пока нет[/yellow]")
+        return
     
     # Сортируем категории по сумме
     sorted_categories = sorted(
@@ -326,14 +355,19 @@ def show_statistics(tracker: FinanceTracker):
         reverse=True
     )
     
-    print("Категория              | Сумма")
-    print("-" * 40)
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("Категория", style="cyan")
+    table.add_column("Сумма", justify="right")
     
     for category, amount in sorted_categories:
         sign = "+" if amount > 0 else ""
-        print(f"{category:20} | {sign}{amount:.2f} руб.")
+        amount_str = f"{sign}{amount:.2f}"
+        style = "green" if amount > 0 else "red"
+        
+        table.add_row(category, amount_str, style=style)
     
-    print()
+    tracker.console.print(table)
+    tracker.console.print("\n")
 
 def delete_transaction_menu(tracker: FinanceTracker):
     """Меню удаления транзакции"""
@@ -342,53 +376,68 @@ def delete_transaction_menu(tracker: FinanceTracker):
     transactions = tracker.get_all_transactions()
     
     if not transactions:
-        print("📭 Транзакций пока нет")
+        tracker.console.print("[yellow]📭 Транзакций пока нет[/yellow]")
         return
     
     # Показываем все транзакции с номерами
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("ID", style="dim", width=5)
+    table.add_column("Дата", style="dim")
+    table.add_column("Категория")
+    table.add_column("Описание")
+    table.add_column("Сумма", justify="right")
+    
     for transaction in transactions:
         sign = "+" if transaction['amount'] > 0 else ""
-        print(f"{transaction['id']}. [{transaction['date']}] "
-              f"{transaction['category']}: {transaction['description']} - "
-              f"{sign}{transaction['amount']:.2f} руб.")
+        amount_str = f"{sign}{transaction['amount']:.2f}"
+        style = "green" if transaction['amount'] > 0 else "red"
+        
+        table.add_row(
+            str(transaction['id']),
+            transaction['date'],
+            transaction['category'],
+            transaction['description'],
+            amount_str,
+            style=style
+        )
     
-    print()
+    tracker.console.print(table)
+    
     try:
-        choice = int(input("Введите ID транзакции для удаления (0 - отмена): "))
+        choice = IntPrompt.ask("\nВведите ID транзакции для удаления (0 - отмена)")
         if choice == 0:
             return
         
         if tracker.delete_transaction(choice):
-            print("✅ Транзакция удалена!")
+            tracker.console.print("[green]✅ Транзакция удалена![/green]")
         else:
-            print("❌ Не удалось удалить транзакцию")
+            tracker.console.print("[red]❌ Не удалось удалить транзакцию[/red]")
             
     except ValueError:
-        print("❌ Неверный ввод")
+        tracker.console.print("[red]❌ Неверный ввод[/red]")
 
 def export_to_csv_menu(tracker: FinanceTracker):
     """Меню экспорта в CSV"""
     print_header("Экспорт в CSV")
     
-    filename = input("Введите имя файла (по умолчанию transactions.csv): ").strip()
-    if not filename:
-        filename = "transactions.csv"
+    filename = Prompt.ask("Введите имя файла (по умолчанию transactions.csv)", default="transactions.csv")
     
     if not filename.endswith('.csv'):
         filename += '.csv'
     
     if tracker.export_to_csv(filename):
-        print(f"✅ Данные успешно экспортированы в {filename}")
+        tracker.console.print(f"[green]✅ Данные успешно экспортированы в {filename}[/green]")
     else:
-        print("❌ Ошибка при экспорте")
+        tracker.console.print("[red]❌ Ошибка при экспорте[/red]")
 
 def main():
     """Главная функция программы"""
     tracker = FinanceTracker()
+    console = Console()
     
     while True:
         print_menu()
-        choice = input("Выберите действие: ")
+        choice = Prompt.ask("Выберите действие", choices=['1', '2', '3', '4', '5', '6', '7', '0'])
         
         if choice == '1':
             add_income(tracker)
@@ -405,10 +454,8 @@ def main():
         elif choice == '7':
             export_to_csv_menu(tracker)
         elif choice == '0':
-            print("\n👋 До свидания!")
+            console.print("\n[bold cyan]👋 До свидания![/bold cyan]")
             break
-        else:
-            print("❌ Неверный выбор, попробуйте снова")
         
         # Пауза перед возвратом в меню
         input("\nНажмите Enter для продолжения...")
