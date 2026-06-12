@@ -1,5 +1,9 @@
 # Personal Finance Tracker
 
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python](https://img.shields.io/badge/python-3.6+-blue.svg)
+![CI](https://github.com/flexxrap/personal-Finance-Tracker/actions/workflows/ci.yml/badge.svg)
+
 Простое консольное приложение для отслеживания личных финансов на Python.
 
 ## Возможности
@@ -39,11 +43,20 @@ python main.py
 8. Экспорт в CSV
 0. Выход
 
+## Тестирование
+
+Проект включает unit-тесты для основной функциональности:
+
+```
+python -m unittest discover tests
+```
+
 ## Структура проекта
 
 - `main.py` - основной файл приложения
-- `finance.db` - база данных SQLite (создается автоматически)
+- `tests/` - unit-тесты
 - `requirements.txt` - зависимости проекта
+- `.github/workflows/` - GitHub Actions workflows
 
 ## Лицензия
 
